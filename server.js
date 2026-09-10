@@ -2,13 +2,21 @@
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
+import "dotenv/config";
 
 const app = express();
 const server = http.createServer(app);
 
+const ALLOWED_ORIGINS = (
+  process.env.ALLOWED_ORIGINS || "https://multicam-frontend.vercel.app,http://localhost:3000"
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const io = new Server(server, {
   cors: {
-    origin: "https://multicam-frontend.vercel.app", // your frontend domain
+    origin: ALLOWED_ORIGINS,
     methods: ["GET", "POST"],
   },
 });
