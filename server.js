@@ -4,7 +4,8 @@ import express from "express";
 import http from "http";
 import cors from "cors";
 import { Server } from "socket.io";
-import { authRouter, socketAuth, usingDevJwtSecret } from "./lib/auth.js";
+import { authRouter, socketAuth, requireAuth, usingDevJwtSecret } from "./lib/auth.js";
+import { mintRoomCode, verifyRoomCode, usingDevRoomSecret } from "./lib/rooms.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -36,6 +37,12 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", uptimeSeconds: Math.round(process.uptime()) });
 });
 
+// Mint a fresh, signed room code. Authed so only signed-in users create rooms;
+// the code itself is the capability others need to join (share via link).
+app.post("/rooms/new", requireAuth, (req, res) => {
+  res.json({ code: mintRoomCode() });
+});
+
 // Every socket must present a valid JWT in the handshake (auth: { token }) —
 // unauthenticated clients can no longer join rooms or relay signaling.
 io.use(socketAuth);
@@ -47,6 +54,13 @@ io.on("connection", (socket) => {
   let currentRoom = null;
 
   socket.on("join-room", (roomId) => {
+    // Only server-minted, signature-valid codes are admitted — a guessed or
+    // typed room name has no valid HMAC and is refused before joining.
+    if (!verifyRoomCode(roomId)) {
+      console.warn(`${socket.id} rejected: invalid room code`);
+      socket.emit("join-error", "Invalid or expired room code. Ask for a fresh invite link.");
+      return;
+    }
     currentRoom = roomId;
     socket.join(roomId);
     console.log(`${socket.id} (${socket.data.user.username}) joined room ${roomId}`);
@@ -111,5 +125,8 @@ server.listen(PORT, () => {
   console.log(`🚀 Signaling server running on port ${PORT}`);
   if (usingDevJwtSecret) {
     console.warn("⚠️  JWT_SECRET is not set — using an insecure dev fallback. Set it in production.");
+  }
+  if (usingDevRoomSecret) {
+    console.warn("⚠️  Neither ROOM_SECRET nor JWT_SECRET is set — room codes use an insecure dev fallback.");
   }
 });
