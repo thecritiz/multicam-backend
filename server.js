@@ -69,6 +69,15 @@ io.on("connection", (socket) => {
   socket.on("answer", ({ to, sdp }) => io.to(to).emit("answer", { from: socket.id, sdp }));
   socket.on("candidate", ({ to, candidate }) => io.to(to).emit("candidate", { from: socket.id, candidate }));
 
+  // Presenting state: when a member starts/stops screen sharing, the room is
+  // told so every client can promote the presenter to their spotlight
+  // (FaceTime-style "the share takes the stage"). Relay-only; the sharer
+  // re-emits on user-joined so late joiners catch up.
+  socket.on("presenting", (presenting) => {
+    if (!currentRoom) return;
+    socket.to(currentRoom).emit("presenting", { from: socket.id, presenting: Boolean(presenting) });
+  });
+
   // Room chat. Sender identity comes from the authed socket, never the client
   // payload. io.to(room) includes the sender, so everyone (sender included)
   // renders the message via the same event — no local echo path to drift.
