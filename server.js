@@ -69,6 +69,21 @@ io.on("connection", (socket) => {
   socket.on("answer", ({ to, sdp }) => io.to(to).emit("answer", { from: socket.id, sdp }));
   socket.on("candidate", ({ to, candidate }) => io.to(to).emit("candidate", { from: socket.id, candidate }));
 
+  // Room chat. Sender identity comes from the authed socket, never the client
+  // payload. io.to(room) includes the sender, so everyone (sender included)
+  // renders the message via the same event — no local echo path to drift.
+  socket.on("chat", (text) => {
+    if (!currentRoom || typeof text !== "string") return;
+    const trimmed = text.trim().slice(0, 500);
+    if (!trimmed) return;
+    io.to(currentRoom).emit("chat", {
+      from: socket.id,
+      username: socket.data.user.username,
+      text: trimmed,
+      ts: Date.now(),
+    });
+  });
+
   socket.on("leave-room", () => {
     if (!currentRoom) return;
     socket.leave(currentRoom);
