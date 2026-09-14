@@ -54,11 +54,17 @@ io.on("connection", (socket) => {
   let currentRoom = null;
 
   socket.on("join-room", (roomId) => {
-    // Only server-minted, signature-valid codes are admitted — a guessed or
-    // typed room name has no valid HMAC and is refused before joining.
-    if (!verifyRoomCode(roomId)) {
-      console.warn(`${socket.id} rejected: invalid room code`);
-      socket.emit("join-error", "Invalid or expired room code. Ask for a fresh invite link.");
+    // Only server-minted, unexpired codes are admitted — a guessed/typed name
+    // has no valid HMAC, and an old invite has passed its signed expiry.
+    const verdict = verifyRoomCode(roomId);
+    if (!verdict.ok) {
+      console.warn(`${socket.id} rejected: ${verdict.reason} room code`);
+      socket.emit(
+        "join-error",
+        verdict.reason === "expired"
+          ? "This invite link has expired — ask for a fresh one."
+          : "Invalid room code. Ask for a fresh invite link."
+      );
       return;
     }
     currentRoom = roomId;
